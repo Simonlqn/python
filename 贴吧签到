@@ -1,0 +1,100 @@
+import requests,json# Session会保持连接，从而加快签到速度
+from time import time  # 记录始末时间
+start_time = time()  # 记录开始时间
+a=True
+while a:
+    try:
+        with open('cookie.txt', 'r')as f:
+            u = f.read()
+            print('cookie读取成功')
+    except:
+        u = input('cookie文件不存在，请输入cookie：')  # 如果cookie文件不存在，则重新储存
+        with open('cookie.txt', 'w')as f:
+            f.write(u)
+            print('cookie存储完毕')
+    finally:    #不管是否报错都向下执行
+        while True:
+            log_path = "E://data/sign_log_{}.txt".format(int(start_time))
+            like_url = 'https://tieba.baidu.com/mo/q/newmoindex?'  # 获取关注的吧列表所用网址
+            sign_url = 'http://tieba.baidu.com/sign/add'  # 签到所用网址
+            tbs = '4fb45fea4498360d1547435295'
+            head = {
+                    'Accept': 'text/html, */*; q=0.01',
+                    'Accept-Encoding': 'gzip, deflate',
+                    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                    'Connection': 'keep-alive',
+                    'Cookie': u,
+                    'Host': 'tieba.baidu.com',
+                    'Referer': 'http://tieba.baidu.com/i/i/forum',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
+                                  'Chrome/71.0.3578.98 Safari/537.36',
+                    'X-Requested-With': 'XMLHttpRequest'}  # 设置请求头及cookie
+            try:
+                s =requests.session()  # 创建Session实例
+                    # 获取关注的贴吧
+                bars = []  # 记录关注的贴吧
+                dic = s.get(like_url, headers=head).json()['data']['like_forum']  # 获取关注的吧列表
+                a=False     #跳出最外层循环
+                break       #跳出内层循环
+            except:
+                u=input('cookie过期或者错误，请重新输入cookie：')   #如果cookie过期则重新输入并且存储起来
+                with open('cookie.txt','w')as f:
+                    f.write(u)
+                    print('cookie存储完毕')
+                    continue
+for bar_info in dic:
+    bars.append(bar_info['forum_name'])  # 过滤信息
+
+    # 签到
+already_signed_code = 1101  # 已经签到返回码
+success_code = 0  # 签到成功返回码
+need_verify_code = 2150040  # 需要验证码返回码
+already_signed = 0  # 记录已经签到的个数
+succees = 0  # 记录成功签到的个数
+failed_bar = []  # 记录签到失败的吧
+logs = []  # 日志记录
+n = 0  # 循环变量
+
+while n < len(bars):  # 主程序
+    bar = bars[n]
+    data = {
+            'ie': 'utf-8',
+            'kw': bar,
+            'tbs': tbs
+        }
+    try:
+        r = s.post(sign_url, data=data, headers=head)
+    except Exception as e:
+        print('未能签到{}, 由于{}。'.format(bar,e))
+        failed_bar.append(bar)
+        continue  # 重试
+    dic = r.json()
+    msg = dic['no']
+    if msg == already_signed_code:
+        already_signed += 1; r = '已经签到过了!'
+    elif msg == need_verify_code:
+        n -= 1; r = '需要验证码，即将重试!'
+    elif msg == success_code:
+        r = "签到成功!你是第{}个签到的吧友,共签到{}天。".format(dic['data']['uinfo']['user_sign_rank'],dic['data']['uinfo']['total_sign_num'])
+    else:
+        r = '未知错误!' + dic['error']
+    print("{}：{}".format(bar,r))
+    succees += 1  # 签到成功+1
+    logs.append(bar+':'+r)  # 日志记录
+    n += 1  # 循环变量
+end_time = time()  # 记录结束时间
+t = end_time - start_time  # 运行时间
+l = len(bars)
+failed = "\n失败列表：" + '\n'.join(failed_bar) if len(failed_bar) else ''
+print('''共{}个吧，其中: {}个吧签到成功，{}个吧签到失败，{}个吧已经签到。{}
+    此次运行用时{}s。'''.format(l,succees,len(failed_bar),already_signed,failed,t))  # 报告
+with open(log_path, 'w') as f:  # 日志记录
+    for log in logs:  # 日志记录
+        f.write(str(log) + '\n')  # 日志记录
+    # b=input('任意键继续，n退出 ：')
+    # if b!='n':
+    #     u=input('请输入cookie：')
+    #     continue
+    #
+    # else:
+    #     break
